@@ -178,13 +178,23 @@
   footer{max-width:1360px;margin:0 auto;padding:4px 18px 30px;font-size:12px;color:var(--ink3);line-height:1.7}
   @media (max-width:1100px){ .flow{grid-template-columns:1fr 1fr} .stage::after{display:none} .result{grid-column:1/-1} }
   @media (max-width:860px){ .picker{grid-template-columns:1fr} #mapBox{height:240px} .side{max-height:none} header.top .sub{display:none} .flow{grid-template-columns:1fr} }
+  .pub{padding:6px 18px 18px}
+  .pubIntro,.pubState{display:flex;gap:12px;align-items:flex-start;background:#f6f6f6;border:1px solid var(--line);border-radius:10px;padding:14px 16px;font-size:14px}
+  .pubIntro{flex-direction:column;gap:4px}
+  .pubState .muted,.pubIntro .muted{font-size:12.5px;margin-top:3px}
+  .pubActs{display:flex;gap:8px;margin:12px 0 16px}
+  .pubActs .btn.pri{padding:10px 18px;font-size:14px}
+  .spin{width:18px;height:18px;border:2px solid #ccc;border-top-color:#111;border-radius:50%;animation:sp 1s linear infinite;flex:none;margin-top:2px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .steps{margin:0;padding-left:20px;font-size:13px;color:var(--ink2)}
+  .steps li{margin:6px 0}.steps li b{color:var(--ink);margin-right:8px}.steps li.now b::after{content:" · 진행 중";color:#b26b00;font-weight:600}
   #country{min-height:calc(100vh - 60px)}
 </style>
 </head>
 <body>
 <header class="top">
   <span class="brand">MANGOCAR · 국가별 수입 마진 허브</span>
-  <span class="sub">나라를 고르면 비용 구조도와 리포트가 열려요</span>
+  <span class="sub">나라를 고르면 리포트가 열려요 · 없는 나라는 발행 요청</span>
   <span class="right"><span class="pill" id="modePill">저장소 확인 중</span><span id="regDate"></span></span>
 </header>
 
@@ -439,11 +449,39 @@ async function renderCountry(){
   renderBody(cid, L);
 }
 function showTab(){ document.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === tab)); document.querySelectorAll(".pane").forEach(p => p.classList.toggle("on", p.id === "p-" + tab)); }
+const REPO = "ghehfl9640-ops/mangocar-market-hub";
+const BUILD_STEPS = [
+  ["망고카 재고 받기", "망고카에 올라온 차 전체(약 8.7만 대) 가격·연식·주행거리"],
+  ["현지 중고차 매물 모으기", "그 나라 대표 중고차 사이트에서 2012년 이후 매물 수집 (차단되면 멈추고 모은 만큼만)"],
+  ["수입 비용 조사", "운임 · 관세 · 특소세 · 부가세 · 통관 대행 · 검사 · 등록비를 공식 자료로 확인, 출처 기록"],
+  ["차량끼리 맞춰 보기", "같은 브랜드·모델·연료·연식·배기량·주행거리 매물 4건 이상과 비교"],
+  ["리포트 페이지 만들기", "현지어 + 영어 페이지, 계산기 · 차량 카드 · 계산 방법"],
+  ["확인 후 발행", "숫자 검산 → 공개 링크 발행 → 이 허브에 자동으로 연결"]];
+function reqGet(){ return lsGet("mh-requests"); }
+function reqUrl(){
+  const title = `[리포트 발행 요청] ${selected.ko} (${selected.en})`;
+  const body = `나라: ${selected.ko} / ${selected.en}\n지도 코드: ${selected.key}\n요청 시각: ${fmtWhen(nowIso())}\n\n현지 중고차 사이트(알면 적기): \n참고 메모: `;
+  return `https://github.com/${REPO}/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
+}
 function renderNoReport(box){
-  box.innerHTML = `<div class="chead"><div><h2>${esc(selected.ko)}</h2><div class="en">${esc(selected.en)} · 리포트 준비 전</div></div></div>
-    <div class="alerts"><div class="alert info">이 나라는 아직 리포트가 없어요. 리포트(data.json)가 생기면 registry.js 에 나라를 추가하면 바로 구조도·근거표·재계산이 붙어요. 아래는 채워야 할 항목이에요.</div></div>
-    <div class="pane on"><div class="flow">${STAGES.map((s, i) => `<div class="stage"><h4>${s}</h4>${GENERIC_NODES.filter(n => n.stage === i).map(n => `<div class="node info"><div class="nh"><span class="nl">${esc(n.label)}</span><span class="amt">모름</span></div><div class="rule">${esc(n.rule)}</div></div>`).join("")}</div>`).join("")}
-    <div class="result"><h4>결과</h4><div class="rbox"><div class="k">총원가 · 현지 시세 · 마진</div><div class="v">모름</div></div></div></div></div>`;
+  const rq = reqGet()[selected.key];
+  box.innerHTML = `<div class="chead"><div><h2>${esc(selected.ko)}</h2><div class="en">${esc(selected.en)} · 아직 리포트가 없어요</div></div></div>
+    <div class="pub">
+      ${rq ? `<div class="pubState"><span class="spin"></span><div><b>발행 요청됨 · 만드는 중이에요</b><div class="muted">${esc(fmtWhen(rq.at))}에 요청했어요. 한 나라에 보통 1~2시간 걸려요 (현지 매물 수집이 대부분). 다 되면 이 나라를 누를 때 리포트가 바로 나와요.</div></div></div>
+        <div class="pubActs"><a class="btn" id="reqOpen" href="${esc(reqUrl())}" target="_blank" rel="noopener">요청 다시 보내기 ↗</a><button class="btn" id="reqCancel">요청 취소</button></div>`
+      : `<div class="pubIntro"><b>${esc(selected.ko)} 리포트를 발행할까요?</b><div class="muted">발행을 누르면 만들기 요청이 등록돼요. 실제 매물과 공식 세율로 만들기 때문에 바로 나오지 않고, 보통 1~2시간 걸려요. 숫자를 지어내지 않아요.</div></div>
+        <div class="pubActs"><button class="btn pri" id="reqGo">리포트 발행하기</button></div>`}
+      <ol class="steps">${BUILD_STEPS.map(([h, d], i) => `<li class="${rq ? (i === 0 ? "now" : "") : ""}"><b>${esc(h)}</b><span>${esc(d)}</span></li>`).join("")}</ol>
+    </div>`;
+  const go = $("#reqGo");
+  if (go) go.onclick = () => {
+    const m = reqGet(); m[selected.key] = {ko: selected.ko, en: selected.en, at: nowIso()}; lsSet("mh-requests", m);
+    window.open(reqUrl(), "_blank", "noopener");
+    toast("발행 요청을 등록했어요. 열린 GitHub 창에서 「Create」만 눌러 주세요.");
+    renderNoReport(box);
+  };
+  const cancel = $("#reqCancel");
+  if (cancel) cancel.onclick = () => { const m = reqGet(); delete m[selected.key]; lsSet("mh-requests", m); renderNoReport(box); };
 }
 
 function renderBody(cid, L){
