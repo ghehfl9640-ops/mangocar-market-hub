@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>망고카 · 국가별 수입 마진 허브</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+<script src="ko.js"></script>
+<script src="registry.js"></script>
+<style>
+  :root{
+    --ink:#111;--ink2:#444;--ink3:#777;--line:#d4d4d4;--line2:#e8e8e8;
+    --bg:#f3f3f3;--paper:#fff;--shade:#ececec;
+    --ok:#1f7a3d;--okbg:#e7f4ec;--warn:#9a5b00;--warnbg:#fff3dc;--bad:#b42318;--badbg:#fdecea;--edit:#1f5fd6;--editbg:#e9f0fd;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:'Noto Sans KR',system-ui,sans-serif;font-size:14px;line-height:1.5}
+  a{color:inherit}
+  button,input,select,textarea{font:inherit;color:inherit}
+  button{cursor:pointer}
+
+  header.top{position:sticky;top:0;z-index:30;height:46px;background:#111;color:#fff;display:flex;align-items:center;gap:16px;padding:0 18px}
+  header.top .brand{font-weight:700;letter-spacing:.02em}
+  header.top .sub{color:#aaa;font-size:12.5px}
+  header.top .right{margin-left:auto;display:flex;gap:10px;align-items:center;font-size:12px;color:#bbb}
+  .pill{border:1px solid #555;border-radius:999px;padding:2px 9px;white-space:nowrap}
+
+  .wrap{max-width:1360px;margin:0 auto;padding:16px 18px}
+  #banner{display:none;margin-bottom:12px}
+
+  .picker{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:14px}
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:12px}
+  #mapBox{position:relative;height:330px;overflow:hidden}
+  #map{width:100%;height:100%;display:block;cursor:grab}
+  .land{fill:#cfcfcf;stroke:#fff;stroke-width:.4;vector-effect:non-scaling-stroke;cursor:pointer}
+  .land:hover{fill:#a9a9a9}
+  .land.has{fill:#111}
+  .land.has:hover{fill:#444}
+  .land.sel{fill:#f2b705!important;stroke:#111;stroke-width:1.4}
+  .sphere{fill:#fafafa}
+  .lbl{font-weight:700;fill:#111;paint-order:stroke;stroke:#fff;pointer-events:none}
+  #tip{position:fixed;pointer-events:none;background:#111;color:#fff;padding:4px 9px;border-radius:4px;font-size:12px;display:none;z-index:60}
+  .mapHint{position:absolute;left:12px;bottom:10px;font-size:11.5px;color:var(--ink3);background:rgba(255,255,255,.85);padding:2px 6px;border-radius:4px}
+  .zoomctl{position:absolute;right:10px;bottom:10px;display:flex;flex-direction:column;gap:4px}
+  .zoomctl button{width:28px;height:28px;border:1px solid var(--line);background:#fff;border-radius:6px}
+
+  .side{padding:12px;display:flex;flex-direction:column;gap:8px;max-height:330px}
+  .side input{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;outline:none}
+  .side input:focus{border-color:#111}
+  .side h3{margin:4px 2px 0;font-size:12.5px;color:var(--ink3);font-weight:500}
+  .clist{overflow:auto;display:flex;flex-direction:column;gap:6px}
+  .cbtn{display:flex;align-items:center;gap:8px;text-align:left;width:100%;background:#fff;border:1px solid var(--line);border-radius:9px;padding:8px 11px}
+  .cbtn:hover{border-color:#111}
+  .cbtn.on{border-color:#111;box-shadow:inset 0 0 0 1px #111;background:#fafafa}
+  .cbtn .nm{font-weight:700}
+  .cbtn .en{color:var(--ink3);font-size:12px}
+  .cbtn .meta{margin-left:auto;display:flex;gap:5px}
+  .cbtn.mini{padding:6px 10px;font-size:13px}
+
+  .badge{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:0 7px;font-size:11px;white-space:nowrap;border:1px solid transparent;line-height:18px}
+  .b-ok{background:var(--okbg);color:var(--ok);border-color:#bfe3cc}
+  .b-warn{background:var(--warnbg);color:var(--warn);border-color:#f3d79e}
+  .b-bad{background:var(--badbg);color:var(--bad);border-color:#f5c2bd}
+  .b-edit{background:var(--editbg);color:var(--edit);border-color:#c5d6f7}
+  .b-mute{background:var(--shade);color:var(--ink2)}
+
+  #country{margin-top:14px}
+  .chead{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;padding:16px 18px 12px}
+  .chead h2{margin:0;font-size:22px}
+  .chead .en{color:var(--ink3);font-size:13px}
+  .acts{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+  .btn{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #111;border-radius:8px;padding:6px 12px;font-size:13px;text-decoration:none;white-space:nowrap}
+  .btn:hover{background:var(--shade)}
+  .btn.pri{background:#111;color:#fff}
+  .btn.pri:hover{background:#333}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn.sm{padding:2px 8px;font-size:12px;border-color:#aaa;border-radius:6px}
+
+  .facts{display:flex;flex-wrap:wrap;gap:8px;padding:0 18px 12px}
+  .fact{border:1px solid var(--line2);border-radius:8px;padding:6px 11px}
+  .fact .k{font-size:11px;color:var(--ink3)}
+  .fact .v{font-family:var(--mono);font-size:14px;font-weight:500}
+  .alerts{padding:0 18px}
+  .alert{border-radius:8px;padding:8px 12px;font-size:13px;margin-bottom:8px;border:1px solid}
+  .alert.bad{background:var(--badbg);border-color:#f5c2bd;color:#7a1a12}
+  .alert.warn{background:var(--warnbg);border-color:#f3d79e;color:#6b4000}
+  .alert.ok{background:var(--okbg);border-color:#bfe3cc;color:#14532d}
+  .alert.info{background:#f6f6f6;border-color:var(--line);color:var(--ink2)}
+
+  .tabs{display:flex;gap:2px;padding:0 18px;border-bottom:1px solid var(--line)}
+  .tabs button{background:none;border:0;border-bottom:2px solid transparent;padding:9px 14px;color:var(--ink3);font-weight:500}
+  .tabs button.on{color:#111;border-bottom-color:#111}
+  .pane{display:none;padding:16px 18px}
+  .pane.on{display:block}
+
+  /* sample */
+  .sample{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:14px;padding:10px 12px;background:#fafafa;border:1px solid var(--line2);border-radius:10px}
+  .sample label{display:flex;flex-direction:column;font-size:11.5px;color:var(--ink3);gap:3px}
+  .sample input,.sample select{border:1px solid var(--line);border-radius:6px;padding:5px 8px;width:130px;background:#fff;color:var(--ink);font-family:var(--mono);font-size:13px}
+  .sample .t{font-weight:700;color:var(--ink);font-size:13px;margin-right:6px;align-self:center}
+
+  /* flow */
+  .flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) 230px;gap:0;align-items:stretch}
+  .stage{display:flex;flex-direction:column;gap:10px;padding:0 14px 0 0;position:relative}
+  .stage::after{content:"→";position:absolute;right:-2px;top:28px;color:#999;font-size:16px}
+  .stage:nth-child(4)::after{right:-2px}
+  .stage h4{margin:0;font-size:12.5px;color:var(--ink2);background:var(--shade);border-radius:6px;padding:4px 9px}
+  .node{border:1px solid var(--line);border-radius:10px;background:#fff;padding:9px 10px;display:flex;flex-direction:column;gap:6px}
+  .node.info{background:#fafafa;border-style:dashed}
+  .node .nh{display:flex;align-items:baseline;gap:6px}
+  .node .nl{font-weight:700;font-size:13.5px}
+  .node .amt{margin-left:auto;font-family:var(--mono);font-weight:500;font-size:13.5px;white-space:nowrap}
+  .node .amt.chg{color:var(--edit)}
+  .node .rule{font-size:11.5px;color:var(--ink3);margin-top:-4px}
+  .prm{border-top:1px dashed var(--line2);padding-top:6px;display:flex;flex-direction:column;gap:3px}
+  .prm .r1{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+  .prm .pl{font-size:12px;color:var(--ink2)}
+  .prm .pv{margin-left:auto;font-family:var(--mono);font-size:12.5px;font-weight:500;white-space:nowrap}
+  .prm .pv.ov{color:var(--edit)}
+  .prm .orig{font-size:11px;color:var(--ink3);font-family:var(--mono)}
+  .prm .src{font-size:11px;line-height:1.45}
+  .prm .src a{color:var(--ink2)}
+  .prm .ovn{font-size:11px;color:var(--edit);background:var(--editbg);border-radius:5px;padding:3px 6px}
+  .prm .tools{display:flex;gap:4px}
+  .ib{border:1px solid var(--line);background:#fff;border-radius:5px;padding:0 6px;font-size:11.5px;line-height:20px}
+  .ib:hover{border-color:#111}
+  .ib.lk{background:#111;color:#fff;border-color:#111}
+  .ib:disabled{opacity:.35;cursor:not-allowed}
+
+  .result{display:flex;flex-direction:column;gap:10px;padding-left:4px}
+  .result h4{margin:0;font-size:12.5px;color:#fff;background:#111;border-radius:6px;padding:4px 9px}
+  .rbox{border:1px solid #111;border-radius:10px;padding:10px;background:#fff}
+  .rbox .k{font-size:11.5px;color:var(--ink3)}
+  .rbox .v{font-family:var(--mono);font-size:18px;font-weight:500}
+  .rbox .o{font-family:var(--mono);font-size:11.5px;color:var(--ink3)}
+  .pos{color:var(--ok)} .neg{color:var(--bad)}
+
+  .kpiT{margin-top:18px}
+  .kpiT h3,.sect{font-size:14px;margin:0 0 8px}
+  table{border-collapse:collapse;width:100%}
+  th{background:#111;color:#fff;font-weight:500;font-size:12px;text-align:left;padding:7px 10px;white-space:nowrap}
+  td{border-bottom:1px solid var(--line2);padding:8px 10px;vertical-align:top;font-size:13px}
+  td.num{font-family:var(--mono);white-space:nowrap;text-align:right}
+  th.num{text-align:right}
+  .tblwrap{overflow-x:auto}
+  .basisT{min-width:1100px;table-layout:fixed}
+  .basisT td.src a{font-size:12px;word-break:break-word}
+  .basisT .d{color:var(--ink3);font-size:11px;font-family:var(--mono)}
+  .muted{color:var(--ink3)}
+  .hint{font-size:12px;color:var(--ink3);margin-top:8px;line-height:1.6}
+
+  iframe.rep{display:block;width:100%;height:900px;border:1px solid var(--line2);border-radius:8px;background:#fff}
+  .rbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:10px;font-size:12.5px}
+  .seg{display:flex;border:1px solid #111;border-radius:8px;overflow:hidden}
+  .seg button{background:#fff;border:0;border-right:1px solid #ccc;padding:6px 12px;font-size:12.5px}
+  .seg button:last-child{border-right:0}
+  .seg button.on{background:#111;color:#fff}
+  .empty{padding:36px;text-align:center;color:var(--ink3)}
+
+  /* modal */
+  #veil{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:70;display:none;align-items:center;justify-content:center}
+  #veil.open{display:flex}
+  .dlg{background:#fff;border-radius:12px;width:min(520px,94vw);overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+  .dlg .tb{background:#111;color:#fff;padding:10px 14px;font-weight:700;display:flex}
+  .dlg .tb button{margin-left:auto;background:none;border:0;color:#fff;font-size:16px}
+  .dlg .bd{padding:14px;display:flex;flex-direction:column;gap:10px}
+  .dlg label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink2)}
+  .dlg input,.dlg textarea{border:1px solid var(--line);border-radius:6px;padding:7px 9px}
+  .dlg textarea{min-height:70px;resize:vertical}
+  .dlg .row{display:flex;gap:8px;justify-content:flex-end}
+  .dlg .cmp{font-size:12px;color:var(--ink3);background:#fafafa;border-radius:6px;padding:7px 9px;line-height:1.6}
+  #toast{position:fixed;left:50%;top:56px;transform:translateX(-50%);background:#111;color:#fff;padding:7px 14px;border-radius:6px;font-size:13px;z-index:80;display:none}
+
+  footer{max-width:1360px;margin:0 auto;padding:4px 18px 30px;font-size:12px;color:var(--ink3);line-height:1.7}
+  @media (max-width:1100px){ .flow{grid-template-columns:1fr 1fr} .stage::after{display:none} .result{grid-column:1/-1} }
+  @media (max-width:860px){ .picker{grid-template-columns:1fr} #mapBox{height:240px} .side{max-height:none} header.top .sub{display:none} .flow{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<header class="top">
+  <span class="brand">MANGOCAR · 국가별 수입 마진 허브</span>
+  <span class="sub">나라를 고르면 비용 구조도와 리포트가 열려요</span>
+  <span class="right"><span class="pill" id="modePill">저장소 확인 중</span><span id="regDate"></span></span>
+</header>
+
+<div class="wrap">
+  <div id="banner" class="alert warn"></div>
+  <div class="picker">
+    <div class="card" id="mapBox">
+      <svg id="map" aria-label="세계 지도 — 나라 선택"></svg>
+      <div class="mapHint">검은색 = 리포트 있음 · 회색 = 준비 전 · 아무 나라나 클릭</div>
+      <div class="zoomctl"><button id="zin" title="확대">+</button><button id="zout" title="축소">−</button><button id="zreset" title="전체">⤢</button></div>
+    </div>
+    <div class="card side">
+      <input id="q" placeholder="나라 검색 (예: 몽골, Chile)" autocomplete="off">
+      <h3>리포트 있는 나라</h3>
+      <div class="clist" id="hasList"></div>
+      <h3 id="searchH" style="display:none">검색 결과</h3>
+      <div class="clist" id="searchList"></div>
+    </div>
+  </div>
+  <div class="card" id="country"><div class="empty">나라를 선택해 주세요.</div></div>
+</div>
+<div id="tip"></div>
+<div id="toast"></div>
+<div id="veil"><div class="dlg"><div class="tb"><span id="dTitle"></span><button id="dClose">×</button></div><div class="bd" id="dBody"></div></div></div>
+
+<footer>
+  「원본 리포트 값」은 각 나라 리포트의 data.json 을 그때그때 읽어 온 값. 「적용값」은 근거 확인값 또는 영업 수정값이며, 구조도·예시 계산·전체 차량 재계산에 모두 반영됨.
+  리포트 원본 탭은 다른 저장소의 공개 페이지라 수정값이 반영되지 않음. 근거 마지막 확인 후 <span id="staleDays"></span>일이 지나면 「재확인 필요」 표시.
+  모든 금액은 공개 자료 기반 추정치이며 판매가 보장이 아님.
+</footer>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const safeUrl = u => /^https:\/\//i.test(u || "") ? u : null;
+const daysSince = iso => iso ? Math.floor((Date.now() - new Date(iso + "T00:00:00")) / 864e5) : Infinity;
+const nowIso = () => new Date().toISOString();
+const fmtWhen = iso => iso ? new Date(iso).toLocaleString("ko-KR", {timeZone: "Asia/Seoul", year: "2-digit", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false}) : "";
+function toast(m){ const t = $("#toast"); t.textContent = m; t.style.display = "block"; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = "none", 2400); }
+const STATUS = {"확인": ["b-ok", "공식 근거 확인"], "부분확인": ["b-warn", "일부 확인"], "추정": ["b-warn", "추정치"], "불일치": ["b-bad", "리포트가 근거와 다름"]};
+const VTYPE = {"공식": "공식 자료", "업체공개가": "업체 공개가", "근접대체값": "비슷한 노선·대체값", "리포트값": "리포트 값 그대로"};
+const badge = s => { const [c, l] = STATUS[s] || ["b-mute", s || "미확인"]; return `<span class="badge ${c}">${esc(l)}</span>`; };
+
+/* =============================== store =============================== */
+// overrides/{cid__pid}: {value, note, url, by, at}   locks/{cid__pid}: {by, at}
+const store = {mode: "local", ov: {}, lk: {}, canWrite: true, isAdmin: true, uid: null, db: null, user: null};
+const keyOf = (cid, pid) => `${cid}__${pid}`;
+function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || "{}"); } catch (_) { return {}; } }
+function lsSet(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} }
+function loadLocal(){ store.ov = lsGet("mh-overrides"); store.lk = lsGet("mh-locks"); }
+const writing = {};
+function serial(path, fn){ const p = (writing[path] || Promise.resolve()).catch(() => {}).then(fn); writing[path] = p; return p; }
+async function putDoc(col, id, data){
+  if (store.mode !== "db") { store[col === "overrides" ? "ov" : "lk"][id] = data; lsSet(col === "overrides" ? "mh-overrides" : "mh-locks", store[col === "overrides" ? "ov" : "lk"]); rerender(); return; }
+  return serial(col + "/" + id, () => store.db.doc(col + "/" + id).set(data));
+}
+async function delDoc(col, id){
+  if (store.mode !== "db") { delete store[col === "overrides" ? "ov" : "lk"][id]; lsSet(col === "overrides" ? "mh-overrides" : "mh-locks", store[col === "overrides" ? "ov" : "lk"]); rerender(); return; }
+  return serial(col + "/" + id, () => store.db.doc(col + "/" + id).delete());
+}
+function setMode(){
+  const p = $("#modePill");
+  if (store.mode === "db") { p.textContent = "팀 공유 저장 중"; p.title = "수정·잠금이 이 페이지를 보는 모두에게 보여요"; }
+  else { p.textContent = "이 브라우저에만 저장"; p.title = "공유 저장소가 없는 곳(파일·GitHub)에서 열었어요"; }
+}
+async function initStore(){
+  loadLocal(); setMode();
+  let db = null, user = null;
+  try { if (window.claude && window.claude.use) { db = await window.claude.use("db"); user = await window.claude.use("user"); } } catch (_) {}
+  if (!db) return;
+  store.mode = "db"; store.db = db; store.user = user; store.ov = {}; store.lk = {};
+  if (user) {
+    try { store.uid = await user.id(); } catch (_) {}
+    try { store.isAdmin = !!(await user.canEdit()); } catch (_) { store.isAdmin = false; }
+    try { const w = await user.can("data.write"); store.canWrite = w !== false; } catch (_) {}
+  }
+  setMode();
+  const timer = setTimeout(() => { const b = $("#banner"); b.textContent = "공유 저장소 응답을 기다리는 중 — 수정값이 최신이 아닐 수 있어요."; b.style.display = "block"; }, 10000);
+  const fin = m => { if (m && !m.fromCache) { clearTimeout(timer); $("#banner").style.display = "none"; } };
+  db.collection("overrides").onSnapshot(s => { const m = {}; s.docs.forEach(d => { if (d.exists) m[d.id] = d.data(); }); store.ov = m; fin(s.metadata); rerender(); },
+    () => { clearTimeout(timer); const b = $("#banner"); b.textContent = "수정값을 불러오지 못했어요."; b.style.display = "block"; });
+  db.collection("locks").onSnapshot(s => { const m = {}; s.docs.forEach(d => { if (d.exists) m[d.id] = d.data(); }); store.lk = m; fin(s.metadata); rerender(); }, () => {});
+}
+let names = {};
+async function resolveNames(){
+  if (store.mode !== "db" || !store.user) return;
+  const ids = [...new Set([...Object.values(store.ov), ...Object.values(store.lk)].map(x => x && x.by).filter(Boolean))];
+  if (!ids.length) return;
+  try { const ps = await store.user.profiles(ids); let ch = false; ids.forEach(i => { const n = ps[i]?.name || "팀원"; if (names[i] !== n) { names[i] = n; ch = true; } }); if (ch) rerenderSoft(); } catch (_) {}
+}
+const who = by => store.mode === "db" ? (by ? (names[by] || "팀원") : "팀원") : "이 브라우저";
+
+/* =============================== values =============================== */
+const live = {};
+const IN_ARTIFACT = /claude/i.test(location.hostname);
+function getPath(o, p){ return p.split(".").reduce((a, k) => (a == null ? a : a[k]), o); }
+async function loadLive(cid){
+  if (live[cid]) return live[cid];
+  const c = COUNTRIES[cid];
+  const get = u => fetch(u).then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
+  live[cid] = (IN_ARTIFACT ? Promise.reject(new Error("artifact")) : get(c.data + "?hub=" + Date.now()))
+    .then(d => ({ok: true, raw: d, snapshot: false}))
+    .catch(() => get("data/" + cid + ".json").then(d => ({ok: true, raw: d, snapshot: true})))
+    .catch(e => ({ok: false, err: String(e.message || e)}));
+  return live[cid];
+}
+function reportVal(c, p, L){ if (p.path) { const v = L && L.ok ? getPath(L.raw, p.path) : undefined; return v == null ? null : Number(v); } return p.report ?? null; }
+function baseVal(c, p, L){ return p.base != null ? p.base : reportVal(c, p, L); }
+function effVal(cid, p, L){ const o = store.ov[keyOf(cid, p.id)]; return o && isFinite(o.value) ? Number(o.value) : baseVal(COUNTRIES[cid], p, L); }
+function paramSets(cid, L){
+  const c = COUNTRIES[cid], R = {}, E = {};
+  c.params.forEach(p => { R[p.id] = reportVal(c, p, L); E[p.id] = effVal(cid, p, L); });
+  return {R, E};
+}
+function fmtUnit(v, unit){
+  if (v == null || !isFinite(v)) return "모름";
+  const n = Number(v);
+  switch (unit) {
+    case "pct": return (Math.round(n * 100000) / 1000) + "%";
+    case "usd": return "US$" + Math.round(n).toLocaleString("en-US");
+    case "eur": return "€" + Math.round(n).toLocaleString("en-US");
+    case "ntd": return "NT$" + Math.round(n).toLocaleString("en-US");
+    case "yr": return n >= 99 ? "제한 없음" : n + "년";
+    default: return String(n);
+  }
+}
+function money(c, v, P, signed){
+  if (v == null || !isFinite(v)) return "모름";
+  const d = c.toDisp(v, P), r = Math.round(d);
+  const s = signed ? (r > 0 ? "+" : r < 0 ? "−" : "") : (r < 0 ? "−" : "");
+  return s + c.cur + Math.abs(r).toLocaleString("en-US");
+}
+const med = a => { if (!a.length) return NaN; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+const q75 = a => { if (!a.length) return NaN; const s = [...a].sort((x, y) => x - y), pos = (s.length - 1) * .75, lo = Math.floor(pos), hi = Math.ceil(pos); return s[lo] + (s[hi] - s[lo]) * (pos - lo); };
+const kpiCache = {};
+function fleet(cid, L, P, tag){
+  const c = COUNTRIES[cid]; if (!L.ok) return null;
+  const k = cid + tag + JSON.stringify(P);
+  if (kpiCache[k]) return kpiCache[k];
+  const fuels = L.raw.fuels;
+  const gaps = [];
+  for (const r of L.raw.cars) { const m = c.rowMap(r); m.fuel = fuels[m.fuel]; const a = c.compute(m, P); gaps.push(m.market - a.final); }
+  const pos = gaps.filter(g => g > 0);
+  return kpiCache[k] = {n: gaps.length, share: gaps.length ? pos.length / gaps.length : NaN, med: med(pos), p75: q75(pos)};
+}
+function paramsComplete(P){ return Object.values(P).every(v => v != null && isFinite(v)); }
+
+/* =============================== map & lists =============================== */
+let feats = [], landSel, labelG, svg, zoom, gRoot, path;
+const HAS = Object.fromEntries(Object.entries(COUNTRIES).map(([id, c]) => [c.iso, id]));
+const fKey = f => f.id != null ? String(+f.id) : "n:" + f.properties.name;
+const fName = f => KO[f.properties.name] || f.properties.name;
+let selected = null; // {key, cid|null, ko, en}
+
+async function initMap(){
+  svg = d3.select("#map");
+  let topo;
+  try { topo = await (await fetch(IN_ARTIFACT ? "world-110m.json" : "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")).json(); }
+  catch (_) { try { topo = await (await fetch("world-110m.json")).json(); } catch (_) {} }
+  if (!topo) { $("#mapBox").insertAdjacentHTML("beforeend", `<div class="empty">지도를 불러오지 못했어요. 오른쪽 검색으로 골라 주세요.</div>`); return; }
+  feats = topojson.feature(topo, topo.objects.countries).features.filter(f => f.properties.name !== "Antarctica");
+  const proj = d3.geoNaturalEarth1(); path = d3.geoPath(proj);
+  gRoot = svg.append("g");
+  gRoot.append("path").attr("class", "sphere");
+  landSel = gRoot.append("g").selectAll("path").data(feats).join("path")
+    .attr("class", f => "land" + (HAS[fKey(f)] ? " has" : ""))
+    .on("mousemove", (ev, f) => { const t = $("#tip"); t.textContent = fName(f) + (HAS[fKey(f)] ? " · 리포트 있음" : " · 준비 전"); t.style.display = "block"; t.style.left = (ev.clientX + 12) + "px"; t.style.top = (ev.clientY + 10) + "px"; })
+    .on("mouseleave", () => $("#tip").style.display = "none")
+    .on("click", (ev, f) => pickFeature(f));
+  labelG = gRoot.append("g");
+  zoom = d3.zoom().scaleExtent([1, 10]).on("zoom", ev => { gRoot.attr("transform", ev.transform); labelG.selectAll("text").attr("font-size", 11 / ev.transform.k).attr("stroke-width", 3 / ev.transform.k); });
+  svg.call(zoom).on("dblclick.zoom", null);
+  $("#zin").onclick = () => svg.transition().call(zoom.scaleBy, 1.6);
+  $("#zout").onclick = () => svg.transition().call(zoom.scaleBy, 1 / 1.6);
+  $("#zreset").onclick = () => svg.transition().call(zoom.transform, d3.zoomIdentity);
+  const layout = () => {
+    const el = $("#map"), w = el.clientWidth, h = el.clientHeight;
+    proj.fitExtent([[8, 8], [w - 8, h - 8]], {type: "Sphere"});
+    gRoot.select(".sphere").attr("d", path({type: "Sphere"}));
+    landSel.attr("d", path);
+    const hasF = feats.filter(f => HAS[fKey(f)]);
+    labelG.selectAll("text").data(hasF, fKey).join("text").attr("class", "lbl").attr("text-anchor", "middle")
+      .attr("x", f => path.centroid(f)[0]).attr("y", f => path.centroid(f)[1] - 7).attr("font-size", 11).attr("stroke-width", 3).text(fName);
+  };
+  layout(); addEventListener("resize", layout);
+  paintMap();
+}
+function paintMap(){ if (landSel) landSel.classed("sel", f => selected && fKey(f) === selected.key); }
+function pickFeature(f){ const key = fKey(f); selectKey(key, HAS[key] || null, fName(f), f.properties.name); }
+
+function renderHasList(){
+  $("#hasList").innerHTML = Object.entries(COUNTRIES).map(([id, c]) => {
+    const stale = daysSince(c.checkedAt) > STALE_DAYS;
+    const bad = c.params.filter(p => p.status === "불일치").length;
+    const nOv = c.params.filter(p => store.ov[keyOf(id, p.id)]).length;
+    return `<button class="cbtn ${selected && selected.cid === id ? "on" : ""}" data-cid="${id}">
+      <span><span class="nm">${esc(c.ko)}</span> <span class="en">${esc(c.en)}</span></span>
+      <span class="meta">${stale ? `<span class="badge b-bad">재확인 필요</span>` : bad ? `<span class="badge b-bad">불일치 ${bad}</span>` : `<span class="badge b-ok">근거 확인</span>`}${nOv ? `<span class="badge b-edit">수정 ${nOv}</span>` : ""}</span></button>`;
+  }).join("");
+  $("#hasList").querySelectorAll("[data-cid]").forEach(b => b.onclick = () => { const c = COUNTRIES[b.dataset.cid]; selectKey(c.iso, b.dataset.cid, c.ko, c.en); });
+}
+$("#q").addEventListener("input", () => {
+  const q = $("#q").value.trim().toLowerCase();
+  $("#searchH").style.display = q ? "block" : "none";
+  if (!q) { $("#searchList").innerHTML = ""; return; }
+  const hits = feats.filter(f => fName(f).toLowerCase().includes(q) || f.properties.name.toLowerCase().includes(q)).slice(0, 12);
+  $("#searchList").innerHTML = hits.length ? hits.map((f, i) => `<button class="cbtn mini" data-i="${i}"><span class="nm">${esc(fName(f))}</span> <span class="en">${esc(f.properties.name)}</span><span class="meta">${HAS[fKey(f)] ? `<span class="badge b-ok">리포트</span>` : `<span class="badge b-mute">준비 전</span>`}</span></button>`).join("") : `<div class="muted" style="font-size:12.5px;padding:4px">찾는 나라가 없어요.</div>`;
+  $("#searchList").querySelectorAll("[data-i]").forEach(b => b.onclick = () => pickFeature(hits[+b.dataset.i]));
+});
+
+/* =============================== country view =============================== */
+let tab = "report", sample = null, reportMode = "orig", reportSig = null;
+function selectKey(key, cid, ko, en){
+  selected = {key, cid, ko, en};
+  const h = cid || key; if (location.hash.slice(1) !== h) history.replaceState(null, "", "#" + encodeURIComponent(h));
+  sample = cid ? {...COUNTRIES[cid].sample} : null;
+  renderHasList(); paintMap();
+  if (landSel && feats.length) {
+    const f = feats.find(x => fKey(x) === key);
+    if (f) { const [[x0, y0], [x1, y1]] = path.bounds(f), el = $("#map"), w = el.clientWidth, hh = el.clientHeight;
+      const k = Math.max(1, Math.min(6, .5 / Math.max((x1 - x0) / w, (y1 - y0) / hh)));
+      svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity.translate(w / 2, hh / 2).scale(k).translate(-(x0 + x1) / 2, -(y0 + y1) / 2)); }
+  }
+  renderCountry();
+}
+async function renderCountry(){
+  const box = $("#country");
+  if (!selected) { box.innerHTML = `<div class="empty">나라를 선택해 주세요.</div>`; return; }
+  if (!selected.cid) return renderNoReport(box);
+  const cid = selected.cid, c = COUNTRIES[cid];
+  box.innerHTML = `
+    <div class="chead"><div><h2>${esc(c.ko)}</h2><div class="en">${esc(c.en)} · 한국 → ${esc(c.ko)} 중고차 수입 마진</div></div>
+      <div class="acts"><a class="btn pri" href="${esc(c.url)}" target="_blank" rel="noopener">단독 페이지 열기 ↗</a><button class="btn" id="copyLink">고객 공유 링크 복사</button></div></div>
+    <div class="facts" id="facts"></div><div class="alerts" id="alerts"></div>
+    <div class="tabs"><button data-tab="report">리포트</button><button data-tab="flow">비용 구조도</button><button data-tab="basis">근거표</button></div>
+    <div class="pane" id="p-report">
+      <div class="rbar"><div class="seg" id="rSeg"><button data-rm="orig">원본 그대로 (고객이 보는 화면)</button><button data-rm="applied">적용값 반영</button></div><span class="muted" id="rNote"></span></div>
+      <div id="rWarn"></div>
+      <div id="rFrame"><div class="empty">리포트 불러오는 중…</div></div>
+    </div>
+    <div class="pane" id="p-flow"><div class="empty">계산 데이터 불러오는 중…</div></div>
+    <div class="pane" id="p-basis"></div>`;
+  reportSig = null;
+  box.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { reportMode = b.dataset.rm; rerenderSoft(); });
+  $("#copyLink").onclick = async () => { try { await navigator.clipboard.writeText(c.url); toast("링크 복사됨"); } catch (_) { toast("복사가 막혔어요: " + c.url); } };
+  box.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { tab = b.dataset.tab; showTab(); });
+  showTab();
+  const L = await loadLive(cid);
+  if (!selected || selected.cid !== cid) return;
+  renderBody(cid, L);
+}
+function showTab(){ document.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === tab)); document.querySelectorAll(".pane").forEach(p => p.classList.toggle("on", p.id === "p-" + tab)); }
+function renderNoReport(box){
+  box.innerHTML = `<div class="chead"><div><h2>${esc(selected.ko)}</h2><div class="en">${esc(selected.en)} · 리포트 준비 전</div></div></div>
+    <div class="alerts"><div class="alert info">이 나라는 아직 리포트가 없어요. 리포트(data.json)가 생기면 registry.js 에 나라를 추가하면 바로 구조도·근거표·재계산이 붙어요. 아래는 채워야 할 항목이에요.</div></div>
+    <div class="pane on"><div class="flow">${STAGES.map((s, i) => `<div class="stage"><h4>${s}</h4>${GENERIC_NODES.filter(n => n.stage === i).map(n => `<div class="node info"><div class="nh"><span class="nl">${esc(n.label)}</span><span class="amt">모름</span></div><div class="rule">${esc(n.rule)}</div></div>`).join("")}</div>`).join("")}
+    <div class="result"><h4>결과</h4><div class="rbox"><div class="k">총원가 · 현지 시세 · 마진</div><div class="v">모름</div></div></div></div></div>`;
+}
+
+function renderBody(cid, L){
+  const c = COUNTRIES[cid], {R, E} = paramSets(cid, L);
+  // facts
+  const d = L.ok ? L.raw : null;
+  const facts = [["리포트 데이터 기준일", d ? d.date || "모름" : "모름"], ["비교한 망고카 차량", d ? d.cars.length.toLocaleString("ko-KR") + "대" : "모름"],
+    [`현지 매물 (${c.market})`, d && d[c.listingsKey] != null ? Number(d[c.listingsKey]).toLocaleString("ko-KR") + "건" : "모름"], ["근거 마지막 확인", c.checkedAt]];
+  $("#facts").innerHTML = facts.map(([k, v]) => `<div class="fact"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`).join("");
+  // alerts
+  const al = [];
+  const age = daysSince(c.checkedAt);
+  if (age > STALE_DAYS) al.push(["bad", `근거를 ${age}일 동안 다시 확인하지 않았어요. 관세·운임이 바뀌었을 수 있어요.`]);
+  if (!L.ok) al.push(["bad", `리포트 데이터를 읽지 못했어요 (${esc(L.err)}). 원본 값은 「모름」으로 표시해요.`]);
+  else if (L.snapshot) al.push(["warn", `이 화면은 리포트 데이터 사본(${esc(d.date)} 기준)으로 계산해요. 최신 매물은 GitHub 허브나 리포트 원본에서 확인해 주세요.`]);
+  if (L.ok && daysSince(d.date) > 14) al.push(["warn", `리포트 매물 데이터가 ${daysSince(d.date)}일 전 것이에요 (${esc(d.date)}).`]);
+  const bad = c.params.filter(p => p.status === "불일치");
+  if (bad.length) al.push(["bad", `리포트가 공식 근거와 다른 값: ${bad.map(p => esc(p.label)).join(", ")} — 허브는 근거 값으로 계산해요.`]);
+  const nOv = c.params.filter(p => store.ov[keyOf(cid, p.id)]).length;
+  if (nOv) al.push(["info", `영업 수정값 ${nOv}개가 계산에 들어가 있어요 (파란색).`]);
+  $("#alerts").innerHTML = al.map(([k, t]) => `<div class="alert ${k}">${t}</div>`).join("");
+  renderFlow(cid, L, R, E);
+  renderBasis(cid, L, R, E);
+  renderReport(cid, L, E);
+}
+
+/* =============================== report (원본 리포트 그대로) =============================== */
+const htmlCache = {};
+function loadReportHtml(cid){
+  if (htmlCache[cid]) return htmlCache[cid];
+  const c = COUNTRIES[cid], get = u => fetch(u).then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); });
+  htmlCache[cid] = (IN_ARTIFACT ? Promise.reject(0) : get(c.url + "?hub=" + Date.now()))
+    .then(h => ({ok: true, html: h, snapshot: false}))
+    .catch(() => get("reports/" + cid + ".html").then(h => ({ok: true, html: h, snapshot: true})))
+    .catch(e => ({ok: false, err: String(e && e.message || e)}));
+  return htmlCache[cid];
+}
+async function renderReport(cid, L, E){
+  const c = COUNTRIES[cid];
+  document.querySelectorAll("[data-rm]").forEach(b => b.classList.toggle("on", b.dataset.rm === reportMode));
+  const nOv = c.params.filter(p => store.ov[keyOf(cid, p.id)]).length;
+  $("#rNote").textContent = reportMode === "orig" ? "고객에게 공유되는 단독 페이지와 같은 화면이에요." : `근거 확인값${nOv ? ` + 영업 수정값 ${nOv}개` : ""}로 다시 계산한 화면이에요. 고객 페이지는 안 바뀌어요.`;
+  const notIn = reportMode === "applied" && c.notInReport ? c.notInReport.filter(id => { const p = c.params.find(x => x.id === id); return p && Math.abs((E[id] ?? 0) - (reportVal(c, p, L) ?? 0)) > 1e-9; }) : [];
+  $("#rWarn").innerHTML = notIn.length ? `<div class="alert warn">리포트 화면 계산식에 없는 항목이라 여기엔 안 들어가요: ${notIn.map(id => esc(c.params.find(p => p.id === id).label)).join(", ")} — 「비용 구조도」 탭 숫자에는 들어가 있어요.</div>` : "";
+  if (!L.ok) { $("#rFrame").innerHTML = `<div class="empty">리포트 데이터를 읽지 못했어요.</div>`; return; }
+  const cost = reportMode === "applied" ? c.toReportCost(E, L.raw.cost) : L.raw.cost;
+  const sig = cid + reportMode + JSON.stringify(cost);
+  if (sig === reportSig && $("#rFrame iframe")) return;
+  reportSig = sig;
+  const H = await loadReportHtml(cid);
+  if (!selected || selected.cid !== cid) return;
+  if (!H.ok) { $("#rFrame").innerHTML = `<div class="empty">리포트 화면을 불러오지 못했어요. <a href="${esc(c.url)}" target="_blank" rel="noopener">단독 페이지에서 보기 ↗</a></div>`; return; }
+  window.__hubReport = Object.assign({}, L.raw, {cost});
+  const inject = `<script>(function(){var f=window.fetch;window.fetch=function(u){if(String(u).indexOf("data.json")===0){return Promise.resolve({ok:true,json:function(){var d=parent.__hubReport;return Promise.resolve(Object.assign({},d))}})}return f.apply(this,arguments)}})();<\/script><base target="_blank">`;
+  const html = H.html.replace(/<head>/i, "<head>" + inject);
+  const fr = document.createElement("iframe");
+  fr.title = c.ko + " 리포트"; fr.className = "rep"; fr.srcdoc = html;
+  fr.onload = () => {
+    try {
+      const doc = fr.contentDocument, fit = () => { fr.style.height = Math.max(600, doc.documentElement.scrollHeight) + "px"; };
+      fit(); new ResizeObserver(fit).observe(doc.body); setTimeout(fit, 800); setTimeout(fit, 2500);
+    } catch (_) { fr.style.height = "calc(100vh - 80px)"; }
+  };
+  $("#rFrame").innerHTML = ""; $("#rFrame").appendChild(fr);
+  if (H.snapshot && !IN_ARTIFACT) $("#rWarn").insertAdjacentHTML("beforeend", `<div class="alert info">리포트 화면 사본으로 보여 주고 있어요.</div>`);
+}
+
+function paramRow(cid, p, L, R, E){
+  const k = keyOf(cid, p.id), ov = store.ov[k], lk = store.lk[k];
+  const rv = R[p.id], ev = E[p.id];
+  const diff = rv == null || Math.abs(rv - ev) > 1e-9;
+  const srcs = (p.sources || []).map(s => { const u = safeUrl(s.url); return u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(s.title)}</a>${s.date ? ` <span class="muted">${esc(s.date)}</span>` : ""}` : esc(s.title); }).join("<br>");
+  const canEdit = store.canWrite && !lk;
+  const canLock = store.mode !== "db" || store.isAdmin;
+  return `<div class="prm">
+    <div class="r1"><span class="pl">${esc(p.label)}</span><span class="pv ${ov ? "ov" : ""}">${esc(fmtUnit(ev, p.unit))}</span></div>
+    <div class="r1">${ov ? `<span class="badge b-edit">영업 수정</span>` : badge(p.status)}<span class="badge b-mute">${esc(VTYPE[p.vtype] || p.vtype)}</span>
+      ${diff ? `<span class="orig">원본 ${esc(fmtUnit(rv, p.unit))}</span>` : ""}
+      <span class="tools" style="margin-left:auto"><button class="ib" data-edit="${p.id}" ${canEdit ? "" : "disabled"} title="${lk ? "잠겨 있어요" : store.canWrite ? "값 수정" : "수정 권한 없음"}">✎ 수정</button><button class="ib ${lk ? "lk" : ""}" data-lock="${p.id}" ${canLock ? "" : "disabled"} title="${lk ? `잠금: ${esc(who(lk.by))} ${esc(fmtWhen(lk.at))} — 눌러서 풀기` : canLock ? "잠그면 아무도 못 고쳐요" : "편집자만 잠글 수 있어요"}">${lk ? "🔒" : "🔓"}</button></span></div>
+    ${ov ? `<div class="ovn">${esc(ov.note || "메모 없음")}${safeUrl(ov.url) ? ` · <a href="${esc(ov.url)}" target="_blank" rel="noopener">근거 링크</a>` : ""}<br>${esc(who(ov.by))} · ${esc(fmtWhen(ov.at))}</div>` : ""}
+    ${srcs ? `<div class="src">${srcs}</div>` : `<div class="src muted">출처 없음</div>`}
+    ${p.note ? `<div class="src muted">${esc(p.note)}</div>` : ""}
+  </div>`;
+}
+
+function renderFlow(cid, L, R, E){
+  const c = COUNTRIES[cid], el = $("#p-flow");
+  const sm = sample, fuelsOpt = ["Petrol", "Diesel", "Hybrid", "Electric"], fuelKo = {Petrol: "휘발유", Diesel: "디젤", Hybrid: "하이브리드", Electric: "전기"};
+  const car = {usd: +sm.usd || 0, cc: +sm.cc || 0, year: +sm.year || 2022, fuel: sm.fuel, sc: +sm.sc || 0};
+  const okR = paramsComplete(R), aE = c.compute(car, E), aR = okR ? c.compute(car, R) : null;
+  const marketCalc = (+sm.market || 0) / (c.toDisp(1, E) || 1);
+  const gapE = marketCalc - aE.final, gapR = aR ? marketCalc - aR.final : null;
+
+  const nodeHtml = n => {
+    const amt = aE[n.id], amtR = aR ? aR[n.id] : null, chg = aR && Math.abs((amt || 0) - (amtR || 0)) > .5;
+    const prm = n.params.map(pid => c.params.find(p => p.id === pid)).filter(Boolean).map(p => paramRow(cid, p, L, R, E)).join("");
+    const extra = n.sources ? `<div class="prm"><div class="r1">${badge(n.status)}</div><div class="src">${n.sources.map(s => `<a href="${esc(safeUrl(s.url) || "#")}" target="_blank" rel="noopener">${esc(s.title)}</a> <span class="muted">${esc(s.date || "")}</span>`).join("<br>")}</div>${n.note ? `<div class="src muted">${esc(n.note)}</div>` : ""}</div>` : "";
+    return `<div class="node ${n.info ? "info" : ""}"><div class="nh"><span class="nl">${esc(n.label)}</span><span class="amt ${chg ? "chg" : ""}">${n.info ? "원가 제외" : esc(money(c, amt, E))}</span></div>
+      <div class="rule">${esc(n.rule)}${chg ? ` · 원본 ${esc(money(c, amtR, R))}` : ""}</div>${prm}${extra}</div>`;
+  };
+  const stages = STAGES.map((s, i) => `<div class="stage"><h4>${s}</h4>${c.nodes.filter(n => n.stage === i).map(nodeHtml).join("")}</div>`).join("");
+
+  const fE = L.ok ? fleet(cid, L, E, "E") : null, fR = L.ok && okR ? fleet(cid, L, R, "R") : null;
+  const kRow = (label, a, b, f) => `<tr><td>${label}</td><td class="num">${b == null ? "모름" : f(b, R)}</td><td class="num"><b>${a == null ? "모름" : f(a, E)}</b></td></tr>`;
+  const pctF = v => isFinite(v) ? Math.round(v * 100) + "%" : "–";
+  const mF = (v, P) => isFinite(v) ? money(c, v, P, true) : "–";
+
+  el.innerHTML = `
+    <div class="sample"><span class="t">예시 차 1대</span>
+      <label>한국 차값 (US$)<input type="number" data-s="usd" value="${esc(sm.usd)}" step="500"></label>
+      ${c.calcCur === "eur" ? "" : `<label>배기량 (cc)<input type="number" data-s="cc" value="${esc(sm.cc)}" step="100"></label>`}
+      ${cid === "kyrgyzstan" ? `<label>연식<input type="number" data-s="year" value="${esc(sm.year)}" min="2010" max="2026"></label>` : ""}
+      ${c.calcCur === "eur" ? "" : `<label>연료<select data-s="fuel">${fuelsOpt.map(f => `<option value="${f}" ${f === sm.fuel ? "selected" : ""}>${fuelKo[f]}</option>`).join("")}</select></label>`}
+      ${c.bodies ? `<label>차종<select data-s="sc">${c.bodies.map((b, i) => `<option value="${i}" ${i == sm.sc ? "selected" : ""}>${b}</option>`).join("")}</select></label>` : ""}
+      <label>현지 시세 (${esc(c.cur)})<input type="number" data-s="market" value="${esc(sm.market)}" step="1000"></label>
+    </div>
+    <div class="flow">${stages}
+      <div class="result"><h4>⑤ 결과</h4>
+        <div class="rbox"><div class="k">총원가 (적용값)</div><div class="v">${esc(money(c, aE.final, E))}</div>${aR ? `<div class="o">원본 리포트 ${esc(money(c, aR.final, R))}</div>` : ""}</div>
+        <div class="rbox"><div class="k">현지 시세 (${esc(c.market)})</div><div class="v">${esc(c.cur + Math.round(+sm.market || 0).toLocaleString("en-US"))}</div></div>
+        <div class="rbox"><div class="k">마진</div><div class="v ${gapE >= 0 ? "pos" : "neg"}">${esc(money(c, gapE, E, true))}</div>${gapR != null ? `<div class="o">원본 리포트 ${esc(money(c, gapR, R, true))}</div>` : ""}</div>
+      </div>
+    </div>
+    <div class="kpiT"><h3>전체 차량 다시 계산 ${L.ok ? `<span class="muted" style="font-weight:400;font-size:12.5px">· 망고카 차량 ${L.raw.cars.length.toLocaleString("ko-KR")}대 · 수정하면 바로 바뀜</span>` : ""}</h3>
+      ${L.ok ? `<div class="tblwrap"><table style="max-width:760px"><tr><th>지표</th><th class="num">원본 리포트 값으로</th><th class="num">지금 적용값으로</th></tr>
+        ${kRow("비교한 차량", fE && fE.n, fR && fR.n, v => v.toLocaleString("ko-KR") + "대")}
+        ${kRow("모든 비용 넣고도 현지 시세보다 싼 비율", fE && fE.share, fR && fR.share, pctF)}
+        ${kRow("그 차들의 마진 중앙값", fE && fE.med, fR && fR.med, mF)}
+        ${kRow("상위 25% 마진 (부터)", fE && fE.p75, fR && fR.p75, mF)}
+      </table></div><div class="hint">「원본 리포트 값으로」는 리포트 페이지 숫자와 같아야 해요. 「지금 적용값으로」는 근거 확인값 + 영업 수정값으로 다시 계산한 결과예요.</div>` : `<div class="empty">리포트 데이터를 읽지 못해 다시 계산할 수 없어요.</div>`}
+    </div>`;
+  el.querySelectorAll("[data-s]").forEach(inp => inp.addEventListener("change", () => { sample[inp.dataset.s] = inp.type === "number" ? inp.value : inp.value; renderFlow(cid, L, R, E); }));
+  bindParamButtons(el, cid, L);
+}
+
+function renderBasis(cid, L, R, E){
+  const c = COUNTRIES[cid];
+  const rows = c.params.map(p => {
+    const k = keyOf(cid, p.id), ov = store.ov[k], lk = store.lk[k];
+    const srcs = (p.sources || []).map(s => { const u = safeUrl(s.url); return `<div>${u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(s.title)}</a>` : esc(s.title)} <span class="d">${esc(s.date || "")}</span></div>`; }).join("") || `<span class="muted">출처 없음</span>`;
+    return `<tr><td><b>${esc(p.label)}</b>${lk ? " 🔒" : ""}</td><td class="num">${esc(fmtUnit(R[p.id], p.unit))}</td>
+      <td class="num" style="${ov ? "color:var(--edit);font-weight:700" : ""}">${esc(fmtUnit(E[p.id], p.unit))}</td>
+      <td>${ov ? `<span class="badge b-edit">영업 수정</span>` : badge(p.status)}<div style="margin-top:3px"><span class="badge b-mute">${esc(VTYPE[p.vtype] || "")}</span></div></td>
+      <td class="src">${srcs}${ov ? `<div style="color:var(--edit);font-size:12px;margin-top:4px">수정: ${esc(ov.note || "")} · ${esc(who(ov.by))} ${esc(fmtWhen(ov.at))}</div>` : ""}</td>
+      <td style="font-size:12.5px;color:var(--ink2)">${esc(p.note || "")}</td></tr>`;
+  }).join("");
+  $("#p-basis").innerHTML = `<div class="tblwrap"><table class="basisT"><colgroup><col style="width:17%"><col style="width:11%"><col style="width:11%"><col style="width:11%"><col style="width:23%"><col style="width:27%"></colgroup>
+    <tr><th>항목</th><th class="num">원본 리포트</th><th class="num">적용값</th><th>상태</th><th>출처</th><th>어떻게 나왔나</th></tr>${rows}</table></div>
+    <div class="hint">근거 마지막 확인 ${esc(c.checkedAt)} · 구조도 탭에서 값 수정·잠금을 할 수 있어요.</div>`;
+}
+
+/* =============================== edit / lock =============================== */
+function bindParamButtons(root, cid, L){
+  root.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => openEdit(cid, b.dataset.edit, L));
+  root.querySelectorAll("[data-lock]").forEach(b => b.onclick = () => toggleLock(cid, b.dataset.lock));
+}
+const toInput = (v, unit) => unit === "pct" ? +(v * 100).toFixed(4) : v;
+const fromInput = (v, unit) => unit === "pct" ? v / 100 : v;
+function openEdit(cid, pid, L){
+  const c = COUNTRIES[cid], p = c.params.find(x => x.id === pid), k = keyOf(cid, pid);
+  if (store.lk[k]) return toast("잠겨 있어 수정할 수 없어요");
+  const ov = store.ov[k], rv = reportVal(c, p, L), bv = baseVal(c, p, L), cur = effVal(cid, p, L);
+  const unitTxt = {pct: "%", usd: "US$", eur: "€", ntd: "NT$", yr: "년", rate: ""}[p.unit] || "";
+  $("#dTitle").textContent = `${c.ko} · ${p.label}`;
+  $("#dBody").innerHTML = `
+    <div class="cmp">원본 리포트 값: <b>${esc(fmtUnit(rv, p.unit))}</b><br>근거 확인값: <b>${esc(fmtUnit(bv, p.unit))}</b> (${esc(STATUS[p.status]?.[1] || p.status)})<br>지금 적용값: <b>${esc(fmtUnit(cur, p.unit))}</b></div>
+    <label>새 값 ${unitTxt ? `(${esc(unitTxt)})` : ""}<input type="number" id="eVal" step="any" value="${esc(toInput(cur, p.unit))}"></label>
+    <label>근거 메모 (필수) — 누가·어디서 들은 값인지<textarea id="eNote" placeholder="예: OO포워더 11/20 견적서, 부산→기륭 RoRo 대당">${esc(ov?.note || "")}</textarea></label>
+    <label>근거 링크 (있으면)<input type="text" id="eUrl" placeholder="https://" value="${esc(ov?.url || "")}"></label>
+    <div class="row">${ov ? `<button class="btn" id="eReset">근거값으로 되돌리기</button>` : ""}<button class="btn" id="eCancel">취소</button><button class="btn pri" id="eSave">저장</button></div>`;
+  $("#veil").classList.add("open");
+  $("#eCancel").onclick = closeDlg;
+  if ($("#eReset")) $("#eReset").onclick = async () => { try { await delDoc("overrides", k); closeDlg(); toast("근거값으로 되돌렸어요"); } catch (_) { toast("저장 실패 — 권한을 확인해 주세요"); } };
+  $("#eSave").onclick = async () => {
+    const v = parseFloat($("#eVal").value), note = $("#eNote").value.trim(), url = $("#eUrl").value.trim();
+    if (!isFinite(v)) return toast("숫자를 넣어 주세요");
+    if (!note) return toast("근거 메모를 적어 주세요");
+    if (url && !safeUrl(url)) return toast("링크는 https:// 로 시작해야 해요");
+    if (store.lk[k]) return toast("그새 잠겼어요");
+    $("#eSave").disabled = true;
+    try { await putDoc("overrides", k, {cid, pid, value: fromInput(v, p.unit), note, url, by: store.uid, at: nowIso()}); closeDlg(); toast("저장했어요 — 계산에 반영됨"); }
+    catch (_) { $("#eSave").disabled = false; toast("저장 실패 — 권한을 확인해 주세요"); }
+  };
+}
+async function toggleLock(cid, pid){
+  const k = keyOf(cid, pid);
+  if (store.mode === "db" && !store.isAdmin) return toast("편집자만 잠그거나 풀 수 있어요");
+  try {
+    if (store.lk[k]) { if (!(await askConfirm("잠금을 풀까요?", "풀면 다시 누구나 이 값을 수정할 수 있어요."))) return; await delDoc("locks", k); toast("잠금 해제"); }
+    else { await putDoc("locks", k, {cid, pid, by: store.uid, at: nowIso()}); toast("잠갔어요 — 이제 수정할 수 없어요"); }
+  } catch (_) { toast("저장 실패 — 권한을 확인해 주세요"); }
+}
+function askConfirm(title, msg){
+  return new Promise(res => {
+    $("#dTitle").textContent = title;
+    $("#dBody").innerHTML = `<div>${esc(msg)}</div><div class="row"><button class="btn" id="cNo">취소</button><button class="btn pri" id="cYes">풀기</button></div>`;
+    $("#veil").classList.add("open");
+    $("#cNo").onclick = () => { closeDlg(); res(false); };
+    $("#cYes").onclick = () => { closeDlg(); res(true); };
+  });
+}
+function closeDlg(){ $("#veil").classList.remove("open"); }
+$("#dClose").onclick = closeDlg;
+$("#veil").addEventListener("mousedown", e => { if (e.target.id === "veil") closeDlg(); });
+addEventListener("keydown", e => { if (e.key === "Escape") closeDlg(); });
+
+/* =============================== render loop =============================== */
+let rr = null;
+function rerender(){ renderHasList(); rerenderSoft(); resolveNames(); }
+function rerenderSoft(){
+  if (!selected || !selected.cid) return;
+  const cid = selected.cid;
+  clearTimeout(rr); rr = setTimeout(async () => { const L = await loadLive(cid); if (selected && selected.cid === cid && $("#p-flow")) renderBody(cid, L); }, 30);
+}
+
+addEventListener("hashchange", () => {
+  const h = decodeURIComponent(location.hash.slice(1));
+  if (!h || (selected && (selected.cid === h || selected.key === h))) return;
+  if (COUNTRIES[h]) { const c = COUNTRIES[h]; selectKey(c.iso, h, c.ko, c.en); }
+  else { const f = feats.find(x => fKey(x) === h); if (f) pickFeature(f); }
+});
+(async () => {
+  $("#regDate").textContent = "근거 갱신 " + REG_UPDATED;
+  $("#staleDays").textContent = STALE_DAYS;
+  renderHasList();
+  initStore();
+  await initMap();
+  const h = decodeURIComponent(location.hash.slice(1));
+  if (COUNTRIES[h]) { const c = COUNTRIES[h]; selectKey(c.iso, h, c.ko, c.en); }
+  else if (h) { const f = feats.find(x => fKey(x) === h); if (f) pickFeature(f); else { const c = COUNTRIES.taiwan; selectKey(c.iso, "taiwan", c.ko, c.en); } }
+  else { const c = COUNTRIES.taiwan; selectKey(c.iso, "taiwan", c.ko, c.en); }
+})();
+</script>
+</body>
+</html>
