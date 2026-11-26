@@ -178,6 +178,7 @@
   footer{max-width:1360px;margin:0 auto;padding:4px 18px 30px;font-size:12px;color:var(--ink3);line-height:1.7}
   @media (max-width:1100px){ .flow{grid-template-columns:1fr 1fr} .stage::after{display:none} .result{grid-column:1/-1} }
   @media (max-width:860px){ .picker{grid-template-columns:1fr} #mapBox{height:240px} .side{max-height:none} header.top .sub{display:none} .flow{grid-template-columns:1fr} }
+  #country{min-height:calc(100vh - 60px)}
 </style>
 </head>
 <body>
@@ -396,10 +397,11 @@ $("#q").addEventListener("input", () => {
 
 /* =============================== country view =============================== */
 let tab = "report", sample = null, reportMode = "orig", reportSig = null;
-function selectKey(key, cid, ko, en){
+function selectKey(key, cid, ko, en, opts){
   selected = {key, cid, ko, en};
   const h = cid || key; if (location.hash.slice(1) !== h) history.replaceState(null, "", "#" + encodeURIComponent(h));
   sample = cid ? {...COUNTRIES[cid].sample} : null;
+  tab = "report"; reportMode = "orig";
   renderHasList(); paintMap();
   if (landSel && feats.length) {
     const f = feats.find(x => fKey(x) === key);
@@ -408,6 +410,7 @@ function selectKey(key, cid, ko, en){
       svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity.translate(w / 2, hh / 2).scale(k).translate(-(x0 + x1) / 2, -(y0 + y1) / 2)); }
   }
   renderCountry();
+  if (!opts || opts.scroll !== false) requestAnimationFrame(() => { const el = $("#country"); window.scrollTo({top: el.getBoundingClientRect().top + scrollY - 54}); });
 }
 async function renderCountry(){
   const box = $("#country");
@@ -671,7 +674,7 @@ addEventListener("hashchange", () => {
   const h = decodeURIComponent(location.hash.slice(1));
   if (COUNTRIES[h]) { const c = COUNTRIES[h]; selectKey(c.iso, h, c.ko, c.en); }
   else if (h) { const f = feats.find(x => fKey(x) === h); if (f) pickFeature(f); else { const c = COUNTRIES.taiwan; selectKey(c.iso, "taiwan", c.ko, c.en); } }
-  else { const c = COUNTRIES.taiwan; selectKey(c.iso, "taiwan", c.ko, c.en); }
+  else { const c = COUNTRIES.taiwan; selectKey(c.iso, "taiwan", c.ko, c.en, {scroll: false}); }
 })();
 </script>
 </body>
