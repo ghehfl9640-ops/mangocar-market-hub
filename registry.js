@@ -44,6 +44,11 @@ const S = { // 자주 쓰는 출처
   motorDe: {title: "motor.com.de · Auto-Import Ratgeber (TÜV Einzelabnahme €300–1,500)", url: "https://motor.com.de/ratgeber/auto-import", date: "2026"},
   emsKg: {title: "EMS Auto · 한국→키르기스 배송 (예시 운송 166,000솜 ≈ $1,898)", url: "https://emsauto.kg/", date: "날짜 표기 없음"},
   shKg: {title: "SH Global · Kyrgyzstan Import Guide (운송 $2,000–2,600 · 브로커 $150–300)", url: "https://shglobalauto.com/blog/korean-used-cars-kyrgyzstan-import-guide", date: "2026-04-10"},
+  alDogana: {title: "Dogana e Shqipërisë · Zhdoganimi i automjeteve (관세 0 · 부가세 20%)", url: "https://dogana.gov.al/c/179/zhdoganimi-i-automjeteve", date: "2026-11-26 열람"},
+  alFx: {title: "Bank of Albania · 공식 환율", url: "https://www.bankofalbania.org/", date: "2026-11-25"},
+  alShip: {title: "SH Global · Korea → Albania 운임·통관 공개가", url: "https://shglobalauto.com/", date: "2026-04"},
+  alPort: {title: "Porti MBM Durrës · Tarifat (영문 요금표)", url: "https://portimbm.al/", date: "2026-07"},
+  alLux: {title: "Law 9975/2008 사치세 (2차 출처)", url: "https://dogana.gov.al/c/179/zhdoganimi-i-automjeteve", date: "2026-11-26 열람"},
   hanam: {title: "하남시 · 자동차 말소등록 안내 (16,000원)", url: "https://www.hanam.go.kr/www/contents.do?key=5203", date: "2026-09-18"},
   kgCv: {title: "ТК ЕАЭС ст.40", url: "https://www.alta.ru/codex-2018/R1/GL5/", date: "현행"}
 };
@@ -223,6 +228,63 @@ kyrgyzstan: {
     const vatFree = c.fuel === "Electric" && (2026 - c.year) <= P.evVatAge;
     const vat = value * P.fee + (vatFree ? 0 : (value + duty) * P.vat);
     const a = {car: c.usd, krSide: P.krSide, ship, duty, vat, broker: P.broker, reg: P.reg};
+    a.final = Object.values(a).reduce((s, v) => s + v, 0);
+    return a;
+  }
+},
+
+/* ============================== 알바니아 ============================== */
+albania: {
+  iso: "8", ko: "알바니아", en: "Albania",
+  url: "https://ghehfl9640-ops.github.io/mangocar-market-hub/albania/",
+  data: "https://ghehfl9640-ops.github.io/mangocar-market-hub/albania/data.json",
+  market: "okazion.al · autobox.al", listingsKey: "alListings", checkedAt: "2026-11-26",
+  toReportCost: (E, cost) => Object.assign({}, cost, {usdEur: E.usdEur, krSide: E.krSide, ship: E.ship, ins: E.ins, duty: E.duty,
+    port: E.port, broker: E.broker, reg: E.reg, luxCc: E.luxCc, lux: E.lux}),
+  notInReport: [],
+  cur: "€", calcCur: "eur", toDisp: v => v,
+  rowMap: r => ({usd: r[5], market: r[6], year: r[2], fuel: r[3], cc: r[9], sc: 0}),
+  sample: {usd: 30000, cc: 2995, year: 2021, fuel: "Petrol", sc: 0, market: 42000},
+  marketInDisp: true,
+  params: [
+    {id: "usdEur", label: "환율 US$1 = €", unit: "rate", path: "cost.usdEur", status: "확인", vtype: "공식",
+     sources: [S.alFx], note: "알바니아 중앙은행 11/25: 1 USD = 81.96 ALL, 1 EUR = 89.68 ALL → 0.9139."},
+    {id: "krSide", label: "한국 내 비용 (말소·수출통관·선적)", unit: "usd", path: "cost.krSide", status: "부분확인", vtype: "업체공개가",
+     sources: [S.shCost, S.hanam], note: "수출업체 공개가 $250. 말소 공과금 16,000원(공식) 포함."},
+    {id: "ship", label: "해상운임 한국→두러스 (RoRo)", unit: "usd", path: "cost.ship", status: "부분확인", vtype: "업체공개가",
+     sources: [S.alShip], note: "공개가 $1,800–2,500 (같은 업체 다른 페이지 $2,500–3,500). 40ft 컨테이너 공유는 대당 $1,500–1,750. $2,200 적용."},
+    {id: "ins", label: "해상보험 (차값+비용 대비)", unit: "pct", path: "cost.ins", status: "부분확인", vtype: "업체공개가",
+     sources: [S.alShip], note: "운송가의 0.45–0.85%. 중간값 0.65% 적용."},
+    {id: "duty", label: "수입관세 (HS 8703)", unit: "pct", path: "cost.duty", status: "확인", vtype: "공식",
+     sources: [S.alDogana], note: "승용차 관세 0%. 한국과 FTA 없음에도 0. 특소세(akciza)도 승용차는 없음."},
+    {id: "port", label: "두러스 항만 (하역·하선·ISPS)", unit: "eur", path: "cost.port", status: "확인", vtype: "공식",
+     sources: [S.alPort], note: "MBM 공식 요금표 하역 €2 + 자가 하선 €4 + ISPS €1 = €7/대. 주차 500 ALL/일은 넣지 않음."},
+    {id: "broker", label: "통관 대행", unit: "usd", path: "cost.broker", status: "부분확인", vtype: "업체공개가",
+     sources: [S.alShip], note: "공개가 $200–400. 중간 $300 적용."},
+    {id: "reg", label: "등록 · 번호판 · 검사", unit: "eur", path: "cost.reg", status: "추정", vtype: "리포트값",
+     sources: [S.alDogana], note: "공식 요금표를 못 찾음. €95는 추정값. 두러스→티라나 운송비는 모름 (안 넣음)."},
+    {id: "luxCc", label: "사치세 기준 배기량", unit: "cc", path: "cost.luxCc", status: "부분확인", vtype: "공식",
+     sources: [S.alLux], note: "3,000cc 초과 또는 가격 500만 ALL 초과. 리포트는 배기량 기준만 반영."},
+    {id: "lux", label: "사치세 (등록 때 1회)", unit: "eur", path: "cost.lux", status: "부분확인", vtype: "공식",
+     sources: [S.alLux], note: "70,000 ALL ≈ €781. 매년 21,000 ALL은 넣지 않음. 금액은 2차 출처."}
+  ],
+  nodes: [
+    {stage: 0, id: "car", label: "한국 차값", rule: "망고카 매입가 × 환율", params: ["usdEur"]},
+    {stage: 0, id: "krSide", label: "한국 내 비용", rule: "말소 · 수출통관 · 선적", params: ["krSide"]},
+    {stage: 1, id: "ship", label: "해상운임", rule: "한국 → 두러스 RoRo", params: ["ship"]},
+    {stage: 1, id: "ins", label: "보험", rule: "(차값+비용) × 요율", params: ["ins"]},
+    {stage: 2, id: "duty", label: "관세 · 특소세", rule: "승용차 0%", params: ["duty"]},
+    {stage: 2, id: "vatnote", label: "수입부가세 20%", rule: "과세사업자 환급 → 원가 제외", params: [], info: true,
+     sources: [S.alDogana], status: "확인", note: "과세표준 = 세관가 + 국경까지 운임·보험 (Law 92/2014). 세관가가 의심되면 배기량별 최저가 적용 (지침 26호)."},
+    {stage: 2, id: "lux", label: "사치세", rule: "3,000cc 초과 시 70,000 ALL", params: ["luxCc", "lux"]},
+    {stage: 3, id: "port", label: "두러스 항만", rule: "MBM 요금표", params: ["port"]},
+    {stage: 3, id: "broker", label: "통관 대행", rule: "현지 관세사", params: ["broker"]},
+    {stage: 3, id: "reg", label: "등록 · 번호판", rule: "DPSHTRR", params: ["reg"]}
+  ],
+  compute(c, P) {
+    const e = P.usdEur, car = c.usd * e, kr = P.krSide * e, ship = P.ship * e, ins = (c.usd + P.krSide + P.ship) * P.ins * e;
+    const duty = (car + kr + ship + ins) * P.duty, lux = (c.cc || 0) > P.luxCc ? P.lux : 0;
+    const a = {car, krSide: kr, ship, ins, duty, vatnote: 0, lux, port: P.port, broker: P.broker * e, reg: P.reg};
     a.final = Object.values(a).reduce((s, v) => s + v, 0);
     return a;
   }

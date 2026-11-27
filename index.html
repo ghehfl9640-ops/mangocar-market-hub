@@ -318,6 +318,7 @@ function fmtUnit(v, unit){
     case "eur": return "€" + Math.round(n).toLocaleString("en-US");
     case "ntd": return "NT$" + Math.round(n).toLocaleString("en-US");
     case "yr": return n >= 99 ? "제한 없음" : n + "년";
+    case "cc": return Math.round(n).toLocaleString("en-US") + "cc";
     default: return String(n);
   }
 }
@@ -644,7 +645,7 @@ function openEdit(cid, pid, L){
   const c = COUNTRIES[cid], p = c.params.find(x => x.id === pid), k = keyOf(cid, pid);
   if (store.lk[k]) return toast("잠겨 있어 수정할 수 없어요");
   const ov = store.ov[k], rv = reportVal(c, p, L), bv = baseVal(c, p, L), cur = effVal(cid, p, L);
-  const unitTxt = {pct: "%", usd: "US$", eur: "€", ntd: "NT$", yr: "년", rate: ""}[p.unit] || "";
+  const unitTxt = {pct: "%", usd: "US$", eur: "€", ntd: "NT$", yr: "년", cc: "cc", rate: ""}[p.unit] || "";
   $("#dTitle").textContent = `${c.ko} · ${p.label}`;
   $("#dBody").innerHTML = `
     <div class="cmp">원본 리포트 값: <b>${esc(fmtUnit(rv, p.unit))}</b><br>근거 확인값: <b>${esc(fmtUnit(bv, p.unit))}</b> (${esc(STATUS[p.status]?.[1] || p.status)})<br>지금 적용값: <b>${esc(fmtUnit(cur, p.unit))}</b></div>

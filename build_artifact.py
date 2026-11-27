@@ -12,6 +12,7 @@ REPORTS = {
     "taiwan": "https://hyunwook-in.github.io/mangocar-taiwan/data.json",
     "germany": "https://hyunwook-in.github.io/mangocar-germany/data.json",
     "kyrgyzstan": "https://hyunwook-in.github.io/mangocar-kyrgyzstan/data.json",
+    "albania": "https://ghehfl9640-ops.github.io/mangocar-market-hub/albania/data.json",
 }
 WORLD = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json"
 
